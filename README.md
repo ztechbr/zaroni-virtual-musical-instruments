@@ -7,6 +7,19 @@ A Python desktop application that turns your computer into a small music studio:
 - Python 3.10+
 - `pygame` 2.6+ and `numpy` (see `requirements.txt`)
 
+### Quick start (recommended)
+
+The launchers create a local virtual environment (`.venv`) on the first run, install the dependencies (again only when `requirements.txt` changes) and start the application.
+
+| System        | Command                                                   |
+| ------------- | --------------------------------------------------------- |
+| macOS / Linux | `./execute.sh` (if needed first: `chmod +x execute.sh`)   |
+| Windows       | Double-click `execute.bat`, or run `execute.bat` in a terminal |
+
+On Debian/Ubuntu, creating the virtual environment may require `sudo apt install python3-venv`.
+
+### Manual installation
+
 ```bash
 python -m pip install -r requirements.txt
 python main.py
