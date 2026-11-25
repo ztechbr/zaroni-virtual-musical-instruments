@@ -121,7 +121,7 @@ The four effects are applied when a bass note is synthesized and can be combined
 | Slap       | Changes the *excitation* of the string: the noise burst is left unfiltered (brighter), a sharp high-frequency transient imitates the thumb hitting the string, and the note decays faster. Without slap, the burst is smoothed for a softer finger-style pluck. |
 | Compressor | Measures the signal envelope (RMS over 10 ms). Above a threshold of 0.2 the level is reduced with a 4:1 ratio, then make-up gain restores the peak. Result: a more even, longer-sounding note. |
 | Distortion | Soft-clipping waveshaper `tanh(7·x)`, which squares off the waveform and adds harmonics, followed by a light low-pass filter to tame harshness. |
-| Chorus     | Mixes the dry signal with a copy delayed by about 20 ms, with the delay swept ±5 ms by a 0.9 Hz LFO. Left and right channels use opposite modulation, giving a wide stereo image. |
+| Chorus     | Mixes the dry signal with a copy delayed by about 20 ms, with the delay swept ±2 ms by a 0.8 Hz LFO. Left and right channels use opposite modulation, giving a wide stereo image. |
 
 ### Piano sustain pedal
 
@@ -166,7 +166,14 @@ $$
 
 With *N* = 8192 and *f<sub>s</sub>* = 44,100 Hz, each bin is about 5.4 Hz wide, enough to separate the low bass notes. The magnitudes are converted to decibels and grouped into 72 logarithmically spaced bands from 30 Hz to 8 kHz, so each octave gets the same width, as the ear hears it. Bars fall back slowly for a smooth display.
 
-The readout above the graph shows the detected **pitch**, the nearest note and the deviation in cents. Because a plucked bass string often has louder upper harmonics than its fundamental, the pitch is estimated with a **harmonic product spectrum**: the spectrum is multiplied by copies of itself compressed by factors 2, 3 and 4, so only the fundamental, where all harmonics line up, stays strong. Parabolic interpolation then refines the result between bins.
+The readout above the graph shows the detected **pitch**, the nearest note and the deviation in cents. A plucked bass string often has louder upper harmonics than its fundamental, so simply taking the tallest FFT peak would report the wrong octave. Instead, the pitch is estimated with the **YIN algorithm**, which looks for the time lag τ at which the signal best repeats itself:
+
+$$
+d(\tau) = \sum_{j} \left(x[j] - x[j+\tau]\right)^2, \qquad
+d'(\tau) = \frac{d(\tau)}{\frac{1}{\tau}\sum_{i=1}^{\tau} d(i)}
+$$
+
+The first lag where the normalized difference *d′(τ)* drops below 0.15 is the period, and the pitch is $f = f_s / \tau$. The correlation inside *d(τ)* is computed with an FFT, and parabolic interpolation refines τ between samples. When no clear period is found (e.g. drums or noise), no pitch is shown.
 
 ### Drum machine
 

@@ -116,7 +116,7 @@ def bass_wave(n, fx):
         y = smooth(np.tanh(7 * y) / np.tanh(7), 3)
     right = None
     if 'Chorus' in fx:
-        lfo = .005 * np.sin(2 * np.pi * .9 * T)
+        lfo = .002 * np.sin(2 * np.pi * .8 * T)
         left = .75 * y + .6 * np.interp(T - (.02 + lfo), T, y, left=0)
         right = .75 * y + .6 * np.interp(T - (.02 - lfo), T, y, left=0)
         y = left
@@ -563,20 +563,35 @@ def analyse():
     db = 20 * np.log10(mag + 1e-9)
     level = np.clip((db + 80) / 80, 0, 1)
     bars[:] = np.maximum([level[a:b].max() for a, b in zip(B_LO, B_HI)], bars * .88)
-    peak[0] = None
-    if db[1:B_HI[-1]].max() < -55:
-        return
-    # Harmonic product spectrum: multiplying the spectrum with copies compressed by 2, 3 and 4
-    # reinforces the fundamental even when an upper harmonic is the loudest partial.
-    lo, hi = np.searchsorted(FREQS, [F_LO, 1500])
-    hps = np.log(mag[:hi] + 1e-12)
-    for h in (2, 3, 4):
-        hps += np.log(mag[::h][:hi] + 1e-12)
-    k = lo + int(np.argmax(hps[lo:hi]))
-    if k >= 1:
-        a, b, c = db[k - 1], db[k], db[k + 1]
-        p = .5 * (a - c) / (a - 2 * b + c) if a - 2 * b + c else 0
-        peak[0] = (k + p) * RATE / SPEC_N
+    peak[0] = detect_pitch(buf) if db[1:B_HI[-1]].max() > -55 else None
+
+
+MIN_LAG, MAX_LAG = int(RATE / 1500), int(RATE / F_LO) + 2
+YIN_W = SPEC_N - MAX_LAG
+YIN_NFFT = 1 << (SPEC_N + YIN_W).bit_length()
+
+
+def detect_pitch(x):
+    """YIN pitch estimate: the lag at which the signal best repeats itself."""
+    corr = np.fft.irfft(np.fft.rfft(x, YIN_NFFT) * np.conj(np.fft.rfft(x[:YIN_W], YIN_NFFT)), YIN_NFFT)[:MAX_LAG]
+    sq = np.concatenate(([0.0], np.cumsum(x * x)))
+    lags = np.arange(MAX_LAG)
+    d = sq[YIN_W] + sq[lags + YIN_W] - sq[lags] - 2 * corr            # squared difference per lag
+    cum = np.cumsum(d)
+    cmnd = np.ones(MAX_LAG)
+    cmnd[1:] = d[1:] * lags[1:] / np.maximum(cum[1:], 1e-12)          # cumulative-mean normalised
+    below = np.nonzero(cmnd[MIN_LAG:MAX_LAG - 1] < .15)[0]
+    if len(below):
+        tau = MIN_LAG + below[0]
+        while tau + 1 < MAX_LAG - 1 and cmnd[tau + 1] < cmnd[tau]:
+            tau += 1
+    else:
+        tau = MIN_LAG + int(np.argmin(cmnd[MIN_LAG:MAX_LAG - 1]))
+        if cmnd[tau] > .35:
+            return None
+    a, b, c = cmnd[tau - 1], cmnd[tau], cmnd[tau + 1]
+    p = .5 * (a - c) / (a - 2 * b + c) if a - 2 * b + c else 0
+    return RATE / (tau + p)
 
 
 # ---------------------------------------------------------------- drawing
